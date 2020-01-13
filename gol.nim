@@ -3,7 +3,6 @@ import random
 import sequtils
 import strformat
 import strutils
-import osproc
 import colors
 import tables
 import cligen
@@ -153,6 +152,22 @@ proc updateWindow(renderer: RendererPtr, world: World, cellSize: int) =
   renderer.present
 
 
+proc evolve(world: var World, nextWorld: var World) =
+  for row in 0..<world.height:
+    for col in 0..<world.width:
+      let isAlive = cellIsAlive(world, row, col)
+      let willLive = cellAliveInNextGen(world, row, col)
+      var c = getCellColor(world, row, col)# default to keep color
+      if willLive and not isAlive:
+        # just born? apply most common color
+        c = mostCommonNeighbourColor(world, row, col)
+      elif not willLive and isAlive:
+        # just deceased? shade
+        c = intensity(c, 0.2)
+      setCellStatus(nextWorld, row, col, willLive, c)
+  world = nextWorld
+
+
 # main function
 proc gol(winWidth = 640, winHeight = 480, cellSize = 4,
          withBorder = false, sleepSecs = 0.0, density = 0.15,
@@ -204,30 +219,16 @@ proc gol(winWidth = 640, winHeight = 480, cellSize = 4,
 
     numGen += 1
     if numGen mod 100 == 0:
-      let elapsed = epochTime() - t0
+      let elapsed = epochTime() - t0 - sleepSecs/1000.0
       let elapsedStr = elapsed.formatFloat(format = ffDecimal, precision = 3)
       t0 = epochTime()
       let p = numCellsAlive(world)/(worldHeight*worldWidth)*100.0
-      echo fmt"Evolving generation {numGen}. Its world is {int(p)}% populated. Time taken: {elapsedStr} "
+      echo fmt"Evolving generation {numGen}. Its world is {int(p)}% populated. Passed time: {elapsedStr} "
 
     if numGen == maxGenerations:
       break
 
-    # evolve
-    for row in 0..<world.height:
-      for col in 0..<world.width:
-        let isAlive = cellIsAlive(world, row, col)
-        let willLive = cellAliveInNextGen(world, row, col)
-        var c = getCellColor(world, row, col)# default to keep color
-        if willLive and not isAlive:
-          # just born? apply most common color
-          c = mostCommonNeighbourColor(world, row, col)
-        elif not willLive and isAlive:
-          # just deceased? shade
-          c = intensity(c, 0.2)
-        setCellStatus(nextWorld, row, col, willLive, c)
-
-    world = nextWorld
+    evolve(world, nextworld)
 
   renderer.destroy()
   window.destroy()
