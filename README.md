@@ -1,7 +1,10 @@
 # Conway's Game of life in Nim with SDL2
 
 Features:
-- With colors (inspired by [Jim Blackler's version](https://jimblackler.net/blog/?p=384))
+- With colors (inspired by [Jim Blackler's version](https://jimblackler.net/blog/?p=384)):
+  - At startup the cells are assigned colors randomly
+  - Newly-created cells take the most common color of neighbouring cells
+  - When cells die they leave a shaded version of their original color
 - Borderless (optional)
 
 
@@ -25,5 +28,4 @@ The resulting binary is called `gol`. Run `./gol -h` to see command-line argumen
 
 ## TODO
 
-- support RLE import
-- leave background color
+- Support RLE import
