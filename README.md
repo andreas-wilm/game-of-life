@@ -34,3 +34,16 @@ For importing RLE patterns (e.g. downloaded from the [LifeWiki](https://www.conw
 - Speed improvements:
   - Use sparse matrix
   - Use of fillRect instead of drawPoint (for `c`>1)
+
+# Screenshots
+
+## From a random start position
+
+![Random Start](./screenshot-random-start.png "Random start position")
+
+
+## [Methusaleh Wilma](https://www.conwaylife.com/wiki/Wilma)
+
+After 1043 generations with a few escaping [gliders](https://www.conwaylife.com/wiki/Glider)
+
+![Wilma](./screenshot-wilma.png "Wilma 1043th generation")
