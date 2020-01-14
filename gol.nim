@@ -1,3 +1,5 @@
+## Yet another Game of Life implementation. This one is based on Nim and SDL.
+#
 # Author: Andreas Wilm
 # License: MIT, see LICENSE
 
@@ -244,7 +246,7 @@ proc gol(width = 640, height = 480, cellSize = 4,
     if stopped:
       continue
     renderer.updateWindow(world, cellSize)
-    sleep(int(sleepSecs * 1000))
+    sleep(int(sleepSecs * 1000))# FIXME is there an SDL sleep which still allows to capture events?
 
     numGen += 1
     if numGen mod 100 == 0:

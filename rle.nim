@@ -1,3 +1,8 @@
+## module for parsing Game of Life RLE files. Not well tested.
+#
+# Author: Andreas Wilm
+# License: MIT, see LICENSE
+
 import strutils
 import sequtils
 import strformat
@@ -167,5 +172,5 @@ proc parseRLEFile*(fn: string, padding = 0): (seq[seq[bool]], Info) =
 when isMainModule:
     var cells: seq[seq[bool]]
     var info: Info
-    (cells, info) = parseRLEFile("patterns/wilma.rle")
+    (cells, info) = parseRLEFile("wilma.rle")
     printcells(cells)

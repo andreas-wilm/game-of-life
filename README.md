@@ -2,7 +2,7 @@
 
 ## Why?
 
-Because I needed something to tinker with. This started as a one day experiment, which got a bit out of hand. The code is not optimized in any way and really just my playground.
+Because I needed something to tinker with. This started as a one day experiment for brushing up my Nim skills and got a bit out of hand. The code is not optimized in any way and really just my playground.
 
 ## Features:
 
