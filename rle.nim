@@ -1,30 +1,21 @@
-#import io
-#import system
-#import re
 import strutils
 import sequtils
 import strformat
+
 
 const DEFAULT_RULE = "B3/S23"
 
 
 type Info* = object
-  comments: seq[string]
-  name: string
-  authordate: string
-  topleftCoords: string
-  rule: string
-
-
-type World* = object
-  height: int
-  width: int
-  cells: seq[seq[bool]]
-  info: Info
+  comments*: seq[string]
+  name*: string
+  authordate*: string
+  topleftCoords*: string
+  rule*: string
 
 
 proc parseInfoSection(fh: File, info: var Info): string =
-  ## sets ``info`` and returns unparsed line
+  ## sets ``info`` and returns unparsed/peeked next line
   for line in lines(fh):
     # detect end
     if not line.startsWith("#"):
@@ -47,7 +38,7 @@ proc parseInfoSection(fh: File, info: var Info): string =
         info.topleftCoords = value
       of 'r':
         assert len(info.rule) == 0
-        info.rule = value
+        info.rule = value.toUpperAscii
       else:
         raise newException(ValueError, fmt"Unknown info line letter '{letter}'")
 
@@ -61,7 +52,6 @@ proc parseHeaderLine(line: TaintedString): (int, int, string) =
 
   # strip for easier parsing and leniency
   var parts = line.replace(" ", "").split(",", maxsplit=3)
-  echo fmt"DEBUG: has {len(parts)} parts"
 
   if len(parts) < 2:
     raise newException(ValueError, fmt"Couldn't parse line '{line}'")
@@ -71,7 +61,7 @@ proc parseHeaderLine(line: TaintedString): (int, int, string) =
     let ruleeq = parts[2]
     assert ruleeq.startsWith("rule=")
     assert ruleeq.count("=") == 1
-    rule = ruleeq.split("=", maxsplit=2)[1]
+    rule = ruleeq.split("=", maxsplit=2)[1].toUpperAscii
 
   assert xeq.startsWith("x=")
   assert xeq.count("=") == 1
@@ -84,6 +74,7 @@ proc parseHeaderLine(line: TaintedString): (int, int, string) =
   return (height, width, rule)
 
 
+# debugging
 proc printcells(cells: var seq[seq[bool]]) =
     for row in cells:
       var rowStr = ""
@@ -95,16 +86,18 @@ proc printcells(cells: var seq[seq[bool]]) =
       echo rowStr
 
 
-proc parseRLESection(fh: File, cells: var seq[seq[bool]]) =
+proc parseRLESection(fh: File, cells: var seq[seq[bool]], padding = 0) =
   ## parses RLE from ``fh`` and sets (preallocated) ``cells`` accordingly
-  # <run><tag>, if run is missing run=1
+  # <run><tag>
+  # if run is missing run=1
   # b dead
   # o alive
   # $ end of line
-  # stop parsing after discovering !
+  # stop parsing after !
   var runLengthStr: string
   var runLength: int
-  var numRow, numCol: int
+  var numRow = padding
+  var numCol = padding
 
   for line in lines(fh):
     for c in line:
@@ -122,7 +115,7 @@ proc parseRLESection(fh: File, cells: var seq[seq[bool]]) =
           inc(numCol, runLength)
         elif c == '$':
           inc numRow
-          numCol = 0
+          numCol = padding
         elif c == '!':
           break
         runLengthStr = ""# reset
@@ -134,37 +127,45 @@ proc parseRLESection(fh: File, cells: var seq[seq[bool]]) =
         raise newException(ValueError, fmt"Unknown letter '{c}' in RLE string '{line}'")
 
 
-proc parseRLEFile(fn: string): World =
+proc parseRLEFile*(fn: string, padding = 0): (seq[seq[bool]], Info) =
+    ## main entry point: parse rle file ``fn`` and return cells as 2d sequence.
+    ## optionally add some padding.
+    var info: Info# returned
+    var cells: seq[seq[bool]]# returned
+    var height, width: int
     var fh = open(fn, fmRead)
-
     try:
-      let unparsedLine = parseInfoSection(fh, result.info)
-      echo fmt"DEBUG: info = {result.info}"
-      echo fmt"DEBUG: unparsed header line = {unparsedLine}"
+      let unparsedLine = parseInfoSection(fh, info)
+      #echo fmt"DEBUG: info = {info}"
+      #echo fmt"DEBUG: unparsed header line = {unparsedLine}"
       var headerRule: string
-      (result.height, result.width, headerRule) =
+      (height, width, headerRule) =
         parseHeaderLine(unparsedLine)
 
       # rule can be defined in info or header, so consolidate
-      if len(result.info.rule) > 0:
+      if len(info.rule) > 0:
         assert len(headerRule) == 0
       elif len(headerRule) > 0:
-        result.info.rule = headerRule
+        info.rule = headerRule
       else:
-        result.info.rule = DEFAULT_RULE
+        info.rule = DEFAULT_RULE
 
       # init "cells" now that we know the dimensions
       # and parse the actual coordinates
-      result.cells = newSeqWith(result.height,
-                                 newSeq[bool](result.width))
-      parseRLESection(fh, result.cells)
-      echo fmt"DEBUG:..."
-      printcells(result.cells)
+      cells = newSeqWith(height+2*padding, newSeq[bool](width+2*padding))
+      parseRLESection(fh, cells, padding)
+      #printcells(cells)
       # rest discarded according to spec
 
     except IOError:
+      # propagate exception up?
       quit(fmt"Premature end of file in {fn}")
+
+    return (cells, info)
 
 
 when isMainModule:
-    discard parseRLEFile("patterns/wilma.rle")
+    var cells: seq[seq[bool]]
+    var info: Info
+    (cells, info) = parseRLEFile("patterns/wilma.rle")
+    printcells(cells)

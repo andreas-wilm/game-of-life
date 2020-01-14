@@ -33,7 +33,7 @@ randomize()
 
 
 proc numCellsAlive(w: World): int =
-  # while intuitive, there surely must be a cleverer way?
+  # while intuitive, there surely must be a cleverer way.
   # maybe map(), but how for 2d and with custom types?
   for r in 0..<w.height:
     for c in 0..<w.width:
@@ -101,10 +101,6 @@ proc getLiveNeighbourCoords(w: World, row: int, col: int): seq[(int, int)] =
       result.add((nrow, ncol))
 
 
-proc countLiveNeighbours(world: World, row: int, col: int): int {.inline.} =
-  return len(getLiveNeighbourCoords(world, row, col))
-
-
 proc mostCommonNeighbourColor(world: World, row: int, col: int): colors.Color =
   ## returns color most common in neighbouring cells that are alive.
   ## choses color randomly from the list on ties.
@@ -117,7 +113,7 @@ proc mostCommonNeighbourColor(world: World, row: int, col: int): colors.Color =
 proc cellAliveInNextGen(world: World, row: int, col: int): bool =
   ## determine whether cell will live in next generation
   let currentlyAlive = world.cells[row][col]
-  let numLiveNeighbours = countLiveNeighbours(world, row, col)
+  let numLiveNeighbours = len(getLiveNeighbourCoords(world, row, col))
   if currentlyAlive == true:
     # 0..1:# lonely
     if numLiveNeighbours in 2..3:# just right
@@ -166,16 +162,50 @@ proc evolve(world: var World, nextWorld: var World) =
   world = nextWorld
 
 
-proc gol(winWidth = 640, winHeight = 480, cellSize = 4,
-         withBorder = false, sleepSecs = 0.0, density = 0.15,
-         maxGenerations = -1): int =
+proc gol(width = 640, height = 480, cellSize = 4,
+         withBorder: bool = false, sleepSecs = 0.0, density = 0.15,
+         maxGenerations = -1, rleFile = "", rlePadding = 0): int =
   ## main function. meaning of arguments is described below in
   ## cligen interface.
+  var winWidth = width
+  var winHeight = height
+  var borderless = not withBorder
+  var cellsRLE: seq[seq[bool]]
 
-  if cellSize*3 > min(winWidth, winHeight):
-    quit("Cell size too big for screen")
+  if len(rleFile)>0:
+    echo "Loading world"
+    var info: Info
+    (cellsRLE, info) = parseRLEFile(rleFile, rlePadding)
+    if info.rule != "B3/S23":
+      quit("Only supporting rule B3/S23 at the moment")
+    assert len(cellsRLE)>0
+    winHeight = len(cellsRLE) * cellSize
+    winWidth = len(cellsRLE[0]) * cellSize
+    borderless = false
+    # density unused
 
-  echo "Setting up Window"
+    if len(info.topleftCoords) > 0:
+      quit("RLE topleft not supported")# FIXME
+
+  let worldWidth = winWidth div cellSize
+  let worldHeight = winHeight div cellSize
+  var world = createNewWorld(worldHeight, worldWidth, borderless)
+  var nextWorld = deepCopy(world)
+
+  if len(cellsRLE) > 0:
+    echo fmt"DEBUG: cellsRLE = {len(cellsRLE)}x{len(cellsRLE[0])} vs {world.height}x{world.width}"
+    world.cells = cellsRLE
+    for row in 0..<world.height:
+      for col in 0..<world.width:
+        if world.cells[row][col]:
+          world.color[row][col] = sample(COLORS)
+  else:
+    if cellSize*3 > min(winWidth, winHeight):
+      quit("Cell size too big for screen")
+    echo "Populating world"
+    world.populate(density)
+
+  echo "Setting up window"
   var window: WindowPtr
   var renderer: RendererPtr
   var evt = defaultEvent
@@ -187,14 +217,6 @@ proc gol(winWidth = 640, winHeight = 480, cellSize = 4,
   renderer.clear
   renderer.present
   window.raiseWindow
-
-  echo "Creating world"
-  let worldWidth = winWidth div cellSize
-  let worldHeight = winHeight div cellSize
-  #echo fmt"DEBUG worldWidth {worldWidth} worldHeight {worldHeight}"
-  var world = createNewWorld(worldHeight, worldWidth, not withBorder)
-  var nextWorld = deepCopy(world)
-  world.populate(density)
 
   echo "Starting main event loop"
   echo "You can stop (and restart) the simulation by clicking anywhere"
@@ -215,7 +237,7 @@ proc gol(winWidth = 640, winHeight = 480, cellSize = 4,
           if stopped:
             echo "Continuing"
           else:
-            echo "Stopping"
+            echo fmt"Stopping at generation {numGen}"
           stopped = not stopped
         else:
           discard
@@ -245,18 +267,22 @@ when isMainModule:
   import cligen;
   dispatch(gol,
            help = {
-             "winWidth" : "Window width",
-             "winHeight" : "Window height",
+             "width" : "Window width",
+             "height" : "Window height",
              "cellSize" : "Cell size in pixel",
              "withBorder" : "World has border",
              "sleepSecs" : "Seconds to sleep between steps",
              "density" : "Initial population density",
-             "maxGenerations": "Stop after this many generations"},
+             "maxGenerations": "Stop after this many generations",
+             "rleFile": "RLE file to read (overwrites winWidth, winHeight, withBorder and ignores desnity)",
+             "rlePadding": "Add some padding to RLE pattern"},
            short = {
-             "winWidth" : 'x',
-             "winHeight" : 'y',
+             "width" : 'x',
+             "height" : 'y',
              "cellSize" : 'c',
              "withBorder" : 'b',
              "sleepSecs" : 's',
              "density" : 'd',
-             "maxGenerations": 'm'},)
+             "maxGenerations": 'm',
+             "rleFile": 'f',
+             "rlePadding": 'p'},)
