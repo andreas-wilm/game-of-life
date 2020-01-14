@@ -1,3 +1,8 @@
+# Author: Andreas Wilm
+# License: MIT, see LICENSE
+
+
+# standard library
 import os
 import random
 import sequtils
@@ -7,18 +12,17 @@ import colors
 import tables
 import cligen
 import times
-
+# third party
 import sdl2
+# project
+import rle
 
-
-type Cell = object
-  alive: bool
-  color: colors.Color
 
 type World = object
   height: int
   width: int
-  matrix: seq[seq[Cell]]
+  cells: seq[seq[bool]]# true == alive
+  color: seq[seq[colors.Color]]
   borderless: bool
 
 
@@ -28,58 +32,47 @@ const COLORS = @[colRed, colYellow, colBlue, colGreen, colOrange, colPurple]
 randomize()
 
 
-# FIXME too many args
-proc setCellStatus(w: var World, row: int, col: int,
-                   alive: bool, color: colors.Color) =
-  assert row < w.height and col < w.width
-  var cell = addr w.matrix[row][col]# addr! oterhwise this becomes a copy
-  cell.alive = alive
-  cell.color = color
-
-
-proc cellIsAlive(w: World, row: int, col: int): bool =
-  assert row < w.height and col < w.width
-  return w.matrix[row][col].alive
-
-
-proc getCellColor(w: World, row: int, col: int): colors.Color =
-  assert row < w.height and col < w.width
-  return w.matrix[row][col].color
-
-
 proc numCellsAlive(w: World): int =
-  # there surely must be a cleverer way? maybe map, but how for 2d with custom types?
+  # while intuitive, there surely must be a cleverer way?
+  # maybe map(), but how for 2d and with custom types?
   for r in 0..<w.height:
     for c in 0..<w.width:
-      if cellIsAlive(w, r, c):
+      if w.cells[r][c]:
         inc result
 
 
-proc populateWorld(world: var World, density = 0.25) =
+proc populate(world: var World, density = 0.25) =
+  ## populates ``world`` with randomly places cells.
+  ## chance of a living cell equal ``density``
   for row in 0..<world.height:
     for col in 0..<world.width:
       let isAlive = bool(rand(1.0) < density)
       var c = colBlack
       if isAlive:
         c = sample(COLORS)
-      setCellStatus(world, row, col, isAlive, c)
+      world.cells[row][col] = isAlive
+      world.color[row][col] = c
 
 
 proc createNewWorld(height, width: int, borderless = false): World =
+  ## creates a new world, which is empty. call populate() or
+  ## set status for all cells afterwards.
   result.height = height
   result.width = width
-  result.matrix = newSeqWith(height, newSeq[Cell](width))
+  result.cells = newSeqWith(height, newSeq[bool](width))
+  result.color = newSeqWith(height, newSeq[colors.Color](width))
   result.borderless = borderless
 
 
 proc getLiveNeighbourCoords(w: World, row: int, col: int): seq[(int, int)] =
-  var nrow, ncol: int# neighbour coordinates
-  var isAlive: bool
+  ## returns coordinates (int tuple) for all neighbouring cells that are alive
   let neighbourOffsets = [[-1, 1],  [0, 1],  [1, 1],
                           [-1, 0],           [1, 0],
                           [-1, -1], [0, -1], [1, -1]]
 
   for (roff, coff) in neighbourOffsets:
+    var nrow, ncol: int# neighbour coordinates
+    var isAlive: bool
     nrow = row + roff
     ncol = col + coff
 
@@ -93,7 +86,7 @@ proc getLiveNeighbourCoords(w: World, row: int, col: int): seq[(int, int)] =
         ncol = w.width - 1
       elif ncol == w.width:
         ncol = 0
-      isAlive = cellIsAlive(w, nrow, ncol)
+      isAlive = w.cells[nrow][ncol]
     else:
       # this has weird side effects, for example
       # a glider leaving the screen leaves behind a still square of 4
@@ -102,25 +95,28 @@ proc getLiveNeighbourCoords(w: World, row: int, col: int): seq[(int, int)] =
       elif ncol == -1 or ncol == w.width:
         isAlive = false
       else:
-        isAlive = cellIsAlive(w, nrow, ncol)
+        isAlive = w.cells[nrow][ncol]
 
     if isAlive:
       result.add((nrow, ncol))
 
 
-proc countLiveNeighbours(world: World, row: int, col: int): int =
+proc countLiveNeighbours(world: World, row: int, col: int): int {.inline.} =
   return len(getLiveNeighbourCoords(world, row, col))
 
 
 proc mostCommonNeighbourColor(world: World, row: int, col: int): colors.Color =
+  ## returns color most common in neighbouring cells that are alive.
+  ## choses color randomly from the list on ties.
   var liveColors = initCountTable[colors.Color]()
   for (row, col) in getLiveNeighbourCoords(world, row, col):
-    liveColors.inc(getCellColor(world, row, col))
+    liveColors.inc(world.color[row][col])
   result = liveColors.largest[0]
 
 
 proc cellAliveInNextGen(world: World, row: int, col: int): bool =
-  let currentlyAlive = cellIsAlive(world, row, col)
+  ## determine whether cell will live in next generation
+  let currentlyAlive = world.cells[row][col]
   let numLiveNeighbours = countLiveNeighbours(world, row, col)
   if currentlyAlive == true:
     # 0..1:# lonely
@@ -135,14 +131,14 @@ proc cellAliveInNextGen(world: World, row: int, col: int): bool =
 
 
 proc updateWindow(renderer: RendererPtr, world: World, cellSize: int) =
+  ## draws update of all cells
   let alpha = uint8(255)
   for row in 0..<world.height:
     for col in 0..<world.width:
-      var r, g, b: uint8
-      let rgb = extractRGB(getCellColor(world, row, col))
-      r = uint8(rgb[0])
-      g = uint8(rgb[1])
-      b = uint8(rgb[2])
+      let rgb = extractRGB(world.color[row][col])
+      let r = uint8(rgb[0])
+      let g = uint8(rgb[1])
+      let b = uint8(rgb[2])
       renderer.setDrawColor(r, g, b, alpha)
       # draw a square with dimension cellSize
       for i in 1..cellSize:
@@ -153,37 +149,37 @@ proc updateWindow(renderer: RendererPtr, world: World, cellSize: int) =
 
 
 proc evolve(world: var World, nextWorld: var World) =
+  ## evolve the current world and saves results in nextWorld
   for row in 0..<world.height:
     for col in 0..<world.width:
-      let isAlive = cellIsAlive(world, row, col)
+      let isAlive = world.cells[row][col]
       let willLive = cellAliveInNextGen(world, row, col)
-      var c = getCellColor(world, row, col)# default to keep color
+      var c = world.color[row][col]# default to keep color
       if willLive and not isAlive:
         # just born? apply most common color
         c = mostCommonNeighbourColor(world, row, col)
       elif not willLive and isAlive:
         # just deceased? shade
         c = intensity(c, 0.2)
-      setCellStatus(nextWorld, row, col, willLive, c)
+      nextWorld.cells[row][col] = willLive
+      nextWorld.color[row][col] = c
   world = nextWorld
 
 
-# main function
 proc gol(winWidth = 640, winHeight = 480, cellSize = 4,
          withBorder = false, sleepSecs = 0.0, density = 0.15,
          maxGenerations = -1): int =
-  ## cellSize = pixels per cell and hence determining world dimension
-  var numGen: int
-  var window: WindowPtr
-  var renderer: RendererPtr
-  var evt = defaultEvent
-  var runGame = true
+  ## main function. meaning of arguments is described below in
+  ## cligen interface.
 
   if cellSize*3 > min(winWidth, winHeight):
     quit("Cell size too big for screen")
 
   echo "Setting up Window"
-  if init(INIT_VIDEO) == SdlError:
+  var window: WindowPtr
+  var renderer: RendererPtr
+  var evt = defaultEvent
+  if init(INIT_VIDEO) == SdlError:# getting a SIGSEGV here on WSL if DISPLAY is not set!?
     quit("Couldn't initialise SDL")
   if createWindowAndRenderer(cint(winWidth), cint(winHeight),
                              0, window, renderer) == SdlError:
@@ -198,24 +194,35 @@ proc gol(winWidth = 640, winHeight = 480, cellSize = 4,
   #echo fmt"DEBUG worldWidth {worldWidth} worldHeight {worldHeight}"
   var world = createNewWorld(worldHeight, worldWidth, not withBorder)
   var nextWorld = deepCopy(world)
-  populateWorld(world, density)
+  world.populate(density)
 
   echo "Starting main event loop"
+  echo "You can stop (and restart) the simulation by clicking anywhere"
   var t0 = epochTime()
+  var stopped = false
+  var runGame = true
+  var numGen: int
   while runGame:
-    updateWindow(renderer, world, cellSize)
-    sleep(int(sleepSecs * 1000))
     while pollEvent(evt):
       case evt.kind:
         of QuitEvent:
           runGame = false
           break
         of MouseButtonDown:
-          var x, y: cint
-          discard getMouseState(x, y)
-          echo fmt"Mouse press at {x}x{y}"
+          #var x, y: cint
+          #discard getMouseState(x, y)
+          #echo fmt"Mouse press at {x}x{y}"
+          if stopped:
+            echo "Continuing"
+          else:
+            echo "Stopping"
+          stopped = not stopped
         else:
           discard
+    if stopped:
+      continue
+    renderer.updateWindow(world, cellSize)
+    sleep(int(sleepSecs * 1000))
 
     numGen += 1
     if numGen mod 100 == 0:
@@ -228,7 +235,7 @@ proc gol(winWidth = 640, winHeight = 480, cellSize = 4,
     if numGen == maxGenerations:
       break
 
-    evolve(world, nextworld)
+    world.evolve(nextworld)
 
   renderer.destroy()
   window.destroy()
@@ -252,5 +259,4 @@ when isMainModule:
              "withBorder" : 'b',
              "sleepSecs" : 's',
              "density" : 'd',
-             "maxGenerations": 'm'},
-             )
+             "maxGenerations": 'm'},)
