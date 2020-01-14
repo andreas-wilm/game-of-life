@@ -27,7 +27,7 @@ The resulting binary is called `gol`.
 
 Run `./gol -h` to see command-line arguments.
 
-For importing RLE patterns (e.g. downloaded from the [LifeWiki](https://www.conwaylife.com/)), it's a good idea to add some padding, e.g. `./gol -f wilma.rle -c 2 -p 100`
+For importing RLE patterns (e.g. downloaded from the [LifeWiki](https://www.conwaylife.com/)), it's a good idea to add some padding, e.g. `./gol -f patterns/p5760unitlifecell.rle -c 1 -p 100`
 
 If you are under WSL2 and this segfaults early, please set the `DISPLAY` variable.
 
@@ -45,10 +45,16 @@ Under Ubuntu/WSL2 I first had to link libSDL2-2.0.so.0 so that Nimble would find
 
 ## From a random start position
 
-![Random Start](./screenshot-random-start.png "Random start position")
+![Random Start](./screenshots/random.png "Random start position")
 
-## [Methusaleh Wilma](https://www.conwaylife.com/wiki/Wilma)
+## [Methusaleh: Wilma](https://www.conwaylife.com/wiki/Wilma)
 
 After 1043 generations with a few escaping [gliders](https://www.conwaylife.com/wiki/Glider)
 
-![Wilma](./screenshot-wilma.png "Wilma 1043th generation")
+![Wilma](./screenshots/wilma-1043.png "Wilma 1043th generation")
+
+## [Metacell: p5760 unit Life cell](https://conwaylife.com/wiki/P5760_unit_Life_cell)
+
+After 397 generations.
+
+![p5760](./screenshots/p5760-gen397.png "p5760 unit Life cell 397th generation")

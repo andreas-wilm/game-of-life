@@ -172,5 +172,5 @@ proc parseRLEFile*(fn: string, padding = 0): (seq[seq[bool]], Info) =
 when isMainModule:
     var cells: seq[seq[bool]]
     var info: Info
-    (cells, info) = parseRLEFile("wilma.rle")
+    (cells, info) = parseRLEFile("patterns/wilma.rle")
     printcells(cells)
