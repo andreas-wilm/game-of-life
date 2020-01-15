@@ -22,13 +22,13 @@ There are plenty of other Game of life implementations in Nim on Github for exam
 You will need [Nim](https://nim-lang.org/install_unix.html) as well as [SDL2](https://wiki.libsdl.org/Installation) installed.
 
 Run `nimble install` (which also installs required Nim packages).
-The resulting binary is called `gol`.
+The resulting binary is called `gol` and placed in your (Nimble) PATH.
 
-Alternatively run `nimble builds` which builds the binary locally but doesn't install it. However, this doesn't use compiler optimization and will hence be slow.
+Alternatively run `nimble build` which builds the binary locally but doesn't install it. However, this doesn't use compiler optimization and will hence be slow.
 
-Run `./gol -h` to see command-line arguments.
+Run `gol -h` or `./gol -h` to see command-line arguments.
 
-For importing RLE patterns (e.g. downloaded from the [LifeWiki](https://www.conwaylife.com/)), it's a good idea to add some padding, e.g. `./gol -f patterns/p5760unitlifecell.rle -c 1 -p 100`
+For importing RLE patterns (e.g. downloaded from the [LifeWiki](https://www.conwaylife.com/)), it's a good idea to add some padding, e.g. `gol -f patterns/p5760unitlifecell.rle -c 1 -p 100`
 
 If you are under WSL2 and this segfaults early, please set the `DISPLAY` variable.
 
@@ -39,17 +39,14 @@ Under Ubuntu/WSL2 I first had to link libSDL2-2.0.so.0 so that Nimble would find
 
 ## TODO
 
-- Fix stupid color handling
+- Fix stupid color handling!
 - Add support for stepping (currently mouse click starts and stops)
-- Zoom?
 
 # Screenshots
 
 ## From a random start position
 
 ![Random Start](./screenshots/random.png "Random start position")
-
-![Wilma](./screenshots/wilma-1043.png "Wilma 1043th generation")
 
 ## [Metacell: p5760 unit Life cell](https://conwaylife.com/wiki/P5760_unit_Life_cell)
 
