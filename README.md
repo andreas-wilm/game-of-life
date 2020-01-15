@@ -39,19 +39,15 @@ Under Ubuntu/WSL2 I first had to link libSDL2-2.0.so.0 so that Nimble would find
 
 ## TODO
 
-- Fix stupid color handling is stupid
-- Step support (currently mouse click starts and stops)
-- Zoom
+- Fix stupid color handling
+- Add support for stepping (currently mouse click starts and stops)
+- Zoom?
 
 # Screenshots
 
 ## From a random start position
 
 ![Random Start](./screenshots/random.png "Random start position")
-
-## [Methusaleh: Wilma](https://www.conwaylife.com/wiki/Wilma)
-
-After 1043 generations with a few escaping [gliders](https://www.conwaylife.com/wiki/Glider)
 
 ![Wilma](./screenshots/wilma-1043.png "Wilma 1043th generation")
 
