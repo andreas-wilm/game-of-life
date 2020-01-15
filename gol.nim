@@ -20,18 +20,36 @@ import sdl2
 import rle
 
 
+type SDLColorTuple = (uint8, uint8, uint8, uint8)
+
 type World = object
   height: int
   width: int
   cells: seq[seq[bool]]# true == alive
-  color: seq[seq[colors.Color]]
+  colors: seq[seq[SDLColorTuple]]
   borderless: bool
+  changedCells: seq[(int, int)]
 
-
+# FIXME color handling should be natively SDL
 const COLORS = @[colRed, colYellow, colBlue, colGreen, colOrange, colPurple]
+
+proc nimToSDLColorTuple(c: colors.Color): SdlColorTuple
+let SDL_COLORS = COLORS.mapIt(nimToSDLColorTuple(it))
+let SDL_COLORS_SHADED = COLORS.mapIt(nimToSDLColorTuple(intensity(it, 0.2)))
+
+let SDL_COLOR_DEAD = nimToSDLColorTuple(colBlack)
 
 
 randomize()
+
+
+proc nimToSDLColorTuple(c: colors.Color): SDLColorTuple =
+  let a = uint8(255)
+  let rgb = extractRGB(c)
+  let r = uint8(rgb[0])
+  let g = uint8(rgb[1])
+  let b = uint8(rgb[2])
+  return (r, g, b, a)
 
 
 proc numCellsAlive(w: World): int =
@@ -49,11 +67,11 @@ proc populate(world: var World, density = 0.25) =
   for row in 0..<world.height:
     for col in 0..<world.width:
       let isAlive = bool(rand(1.0) < density)
-      var c = colBlack
+      var c = SDL_COLOR_DEAD
       if isAlive:
-        c = sample(COLORS)
+        c = sample(SDL_COLORS)
       world.cells[row][col] = isAlive
-      world.color[row][col] = c
+      world.colors[row][col] = c
 
 
 proc createNewWorld(height, width: int, borderless = false): World =
@@ -62,8 +80,11 @@ proc createNewWorld(height, width: int, borderless = false): World =
   result.height = height
   result.width = width
   result.cells = newSeqWith(height, newSeq[bool](width))
-  result.color = newSeqWith(height, newSeq[colors.Color](width))
+  result.colors = newSeqWith(height, newSeq[SDLColorTuple](width))
   result.borderless = borderless
+  for row in 0..<height:
+    for col in 0..<width:
+      result.changedCells.add((row, col))
 
 
 proc getLiveNeighbourCoords(w: World, row: int, col: int): seq[(int, int)] =
@@ -103,12 +124,12 @@ proc getLiveNeighbourCoords(w: World, row: int, col: int): seq[(int, int)] =
       result.add((nrow, ncol))
 
 
-proc mostCommonNeighbourColor(world: World, row: int, col: int): colors.Color =
+proc mostCommonNeighbourColor(world: World, row: int, col: int): SDLColorTuple =
   ## returns color most common in neighbouring cells that are alive.
   ## choses color randomly from the list on ties.
-  var liveColors = initCountTable[colors.Color]()
+  var liveColors = initCountTable[SDLColorTuple]()
   for (row, col) in getLiveNeighbourCoords(world, row, col):
-    liveColors.inc(world.color[row][col])
+    liveColors.inc(world.colors[row][col])
   result = liveColors.largest[0]
 
 
@@ -129,38 +150,46 @@ proc cellAliveInNextGen(world: World, row: int, col: int): bool =
 
 
 proc updateWindow(renderer: RendererPtr, world: World, cellSize: int) =
-  ## draws update of all cells
-  let alpha = uint8(255)
-  for row in 0..<world.height:
-    for col in 0..<world.width:
-      let rgb = extractRGB(world.color[row][col])
-      let r = uint8(rgb[0])
-      let g = uint8(rgb[1])
-      let b = uint8(rgb[2])
-      renderer.setDrawColor(r, g, b, alpha)
+  ## draws update of changes cells
+  #echo fmt"DEBUG updating {len(world.changedCells)} changed cells"
+  for (row, col) in world.changedCells:
+      renderer.setDrawColor(world.colors[row][col])
       # draw a square with dimension cellSize
       for i in 1..cellSize:
         for j in 1..cellSize:
           renderer.drawPoint(cint(col * cellSize + i),
                              cint(row * cellSize + j))
+      # or use SDL: might be faster
+      # don't use in its current form: this seems to draw an oval at higher
+      # cellsizes and coordinates are all wrong.
+      #var r = rect(cint(col), cint(row), cint(cellSize), cint(cellSize))
+      #renderer.fillRect(r)
   renderer.present
 
 
 proc evolve(world: var World, nextWorld: var World) =
   ## evolve the current world and saves results in nextWorld
+  nextWorld.changedCells = @[]
   for row in 0..<world.height:
     for col in 0..<world.width:
       let isAlive = world.cells[row][col]
       let willLive = cellAliveInNextGen(world, row, col)
-      var c = world.color[row][col]# default to keep color
+      var c = world.colors[row][col]# default to keep color
+
+      if willLive xor isAlive:
+        nextWorld.changedCells.add((row, col))
+
       if willLive and not isAlive:
         # just born? apply most common color
         c = mostCommonNeighbourColor(world, row, col)
       elif not willLive and isAlive:
         # just deceased? shade
-        c = intensity(c, 0.2)
+        # FIXME this is stupid
+        let idx = find(SDL_COLORS, c)
+        c = SDL_COLORS_SHADED[idx]
+
       nextWorld.cells[row][col] = willLive
-      nextWorld.color[row][col] = c
+      nextWorld.colors[row][col] = c
   world = nextWorld
 
 
@@ -184,27 +213,24 @@ proc gol(width = 640, height = 480, cellSize = 4,
     winHeight = len(cellsRLE) * cellSize
     winWidth = len(cellsRLE[0]) * cellSize
     borderless = false
-    # density unused
-
-    if len(info.topleftCoords) > 0:
-      quit("RLE topleft not supported")# FIXME
+    # density unused in this casr
 
   let worldWidth = winWidth div cellSize
   let worldHeight = winHeight div cellSize
   var world = createNewWorld(worldHeight, worldWidth, borderless)
   var nextWorld = deepCopy(world)
 
+  echo "Populating world"
   if len(cellsRLE) > 0:
-    echo fmt"DEBUG: cellsRLE = {len(cellsRLE)}x{len(cellsRLE[0])} vs {world.height}x{world.width}"
+    #echo fmt"DEBUG: cellsRLE = {len(cellsRLE)}x{len(cellsRLE[0])} vs {world.height}x{world.width}"
     world.cells = cellsRLE
     for row in 0..<world.height:
       for col in 0..<world.width:
         if world.cells[row][col]:
-          world.color[row][col] = sample(COLORS)
+          world.colors[row][col] = sample(SDL_COLORS)
   else:
     if cellSize*3 > min(winWidth, winHeight):
       quit("Cell size too big for screen")
-    echo "Populating world"
     world.populate(density)
 
   echo "Setting up window"
@@ -223,6 +249,7 @@ proc gol(width = 640, height = 480, cellSize = 4,
   echo "Starting main event loop"
   echo "You can stop (and restart) the simulation by clicking anywhere"
   var t0 = epochTime()
+  var tlast = t0
   var stopped = false
   var runGame = true
   var numGen: int
@@ -246,23 +273,28 @@ proc gol(width = 640, height = 480, cellSize = 4,
     if stopped:
       continue
     renderer.updateWindow(world, cellSize)
-    sleep(int(sleepSecs * 1000))# FIXME is there an SDL sleep which still allows to capture events?
+    sleep(int(sleepSecs * 1000))
+    #delay(uint32(sleepSecs * 1000))# same, also cannot capture events
 
     numGen += 1
     if numGen mod 100 == 0:
-      let elapsed = epochTime() - t0 - sleepSecs/1000.0
+      let elapsed = epochTime() - tlast - sleepSecs/1000.0
       let elapsedStr = elapsed.formatFloat(format = ffDecimal, precision = 3)
-      t0 = epochTime()
-      let p = numCellsAlive(world)/(worldHeight*worldWidth)*100.0
-      echo fmt"Evolving generation {numGen}. Its world is {int(p)}% populated. Passed time: {elapsedStr} "
+      tlast = epochTime()
+      #let p = numCellsAlive(world)/(worldHeight*worldWidth)*100.0
+      #echo fmt"Evolving generation {numGen}. Its world is {int(p)}% populated. Passed time: {elapsedStr}"
+      echo fmt"Evolving generation {numGen}. Passed time: {elapsedStr} since last reported"
 
     if numGen == maxGenerations:
       break
 
     world.evolve(nextworld)
 
-  renderer.destroy()
-  window.destroy()
+  let elapsed = epochTime() - t0 - sleepSecs/1000.0
+  let elapsedStr = elapsed.formatFloat(format = ffDecimal, precision = 3)
+  echo fmt"Stopping at generation {numGen}. Total time: {elapsedStr}"
+
+  sdl2.quit()
 
 
 when isMainModule:

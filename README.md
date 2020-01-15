@@ -21,9 +21,10 @@ There are plenty of other Game of life implementations in Nim on Github for exam
 
 You will need [Nim](https://nim-lang.org/install_unix.html) as well as [SDL2](https://wiki.libsdl.org/Installation) installed.
 
-Run `nimble build` (which also installs required Nim packages).
-
+Run `nimble install` (which also installs required Nim packages).
 The resulting binary is called `gol`.
+
+Alternatively run `nimble builds` which builds the binary locally but doesn't install it. However, this doesn't use compiler optimization and will hence be slow.
 
 Run `./gol -h` to see command-line arguments.
 
@@ -32,14 +33,15 @@ For importing RLE patterns (e.g. downloaded from the [LifeWiki](https://www.conw
 If you are under WSL2 and this segfaults early, please set the `DISPLAY` variable.
 
 Under Ubuntu/WSL2 I first had to link libSDL2-2.0.so.0 so that Nimble would find it:
-`ln -s /usr/lib/x86_64-linux-gnu/libSDL2-2.0.so.0 libSDL2.so`
+
+    ln -s /usr/lib/x86_64-linux-gnu/libSDL2-2.0.so.0 libSDL2.so
+    export LD_LIBRARY_PATH=$(pwd):$LD_LIBRARY_PATH
 
 ## TODO
 
-- Support "unlimited" universe with zoom
-- Speed improvements:
-  - Use sparse matrix
-  - Use of fillRect instead of drawPoint (for `c>1`)?
+- Fix stupid color handling is stupid
+- Step support (currently mouse click starts and stops)
+- Zoom
 
 # Screenshots
 

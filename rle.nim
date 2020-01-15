@@ -3,12 +3,10 @@
 # Author: Andreas Wilm
 # License: MIT, see LICENSE
 
+
 import strutils
 import sequtils
 import strformat
-
-
-const DEFAULT_RULE = "B3/S23"
 
 
 type Info* = object
@@ -55,18 +53,12 @@ proc parseHeaderLine(line: TaintedString): (int, int, string) =
   var width = 0
   var rule = ""
 
-  # strip for easier parsing and leniency
   var parts = line.replace(" ", "").split(",", maxsplit=3)
 
   if len(parts) < 2:
     raise newException(ValueError, fmt"Couldn't parse line '{line}'")
   let xeq = parts[0]
   let yeq = parts[1]
-  if len(parts) == 3:
-    let ruleeq = parts[2]
-    assert ruleeq.startsWith("rule=")
-    assert ruleeq.count("=") == 1
-    rule = ruleeq.split("=", maxsplit=2)[1].toUpperAscii
 
   assert xeq.startsWith("x=")
   assert xeq.count("=") == 1
@@ -75,6 +67,12 @@ proc parseHeaderLine(line: TaintedString): (int, int, string) =
   assert yeq.startsWith("y=")
   assert yeq.count("=") == 1
   height = parseInt(yeq.split("=", maxsplit=2)[1])
+
+  if len(parts) == 3:
+    let ruleeq = parts[2]
+    assert ruleeq.startsWith("rule=")
+    assert ruleeq.count("=") == 1
+    rule = ruleeq.split("=", maxsplit=2)[1].toUpperAscii
 
   return (height, width, rule)
 
@@ -152,14 +150,16 @@ proc parseRLEFile*(fn: string, padding = 0): (seq[seq[bool]], Info) =
         assert len(headerRule) == 0
       elif len(headerRule) > 0:
         info.rule = headerRule
-      else:
-        info.rule = DEFAULT_RULE
+      # default is empty
+
+      if len(info.topleftCoords) > 0:
+        raise newException(ValueError, fmt"Topleft offset in RLE not supported")
 
       # init "cells" now that we know the dimensions
       # and parse the actual coordinates
       cells = newSeqWith(height+2*padding, newSeq[bool](width+2*padding))
       parseRLESection(fh, cells, padding)
-      #printcells(cells)
+      #printcells(cells)# debugging
       # rest discarded according to spec
 
     except IOError:
